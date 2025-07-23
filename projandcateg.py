@@ -1,13 +1,18 @@
 import requests
 import ollama
+from dotenv import load_dotenv
+import os
 
-# ===== KONFIGÜRASYON =====
-BASE_URL = "https://redmine-on-render.onrender.com"
+# ===== ENV YÜKLE =====
+load_dotenv()
+
+BASE_URL = os.getenv("REDMINE_BASE_URL")
 ISSUES_URL = f"{BASE_URL}/issues.json"
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 
 HEADERS = {
     "Content-Type": "application/json",
-    "X-Redmine-API-Key": "b6d5809602dc0844cfecd36248469bc58069a8bd",
+    "X-Redmine-API-Key": os.getenv("REDMINE_API_KEY"),
 }
 
 # ===== REDMINE'DAN PROJELERİ ÇEK =====
@@ -56,14 +61,14 @@ Cevap sadece {konu_adi} adlarından biri olsun ama tam olarak kategori adını v
 """
     messages = [{"role": "user", "content": prompt}]
     try:
-        response = ollama.chat(model="deepseek-r1", messages=messages)
+        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
         raw = response['message']['content'].strip()
         print(f"{konu_adi.capitalize()} tahmini (ham):", raw)
         return raw.splitlines()[-1].strip()
     except Exception as e:
         print(f"Ollama API hatası ({konu_adi}):", e)
         return None
-    
+
 def classify_project_with_ollama(title, description, project_options):
     prompt = f"""
 Bir issue başlığı ve açıklaması vereceğim. Aşağıdaki projelerden sadece tam ve tek bir proje adı olarak cevap ver.
@@ -78,7 +83,7 @@ Cevap sadece proje adlarından biri olsun adını birebir aynı ver. Açıklama 
 """
     messages = [{"role": "user", "content": prompt}]
     try:
-        response = ollama.chat(model="deepseek-r1", messages=messages)
+        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
         raw = response['message']['content'].strip()
         print("Proje tahmini (ham):", raw)
         return raw.splitlines()[-1].strip()
@@ -119,16 +124,14 @@ def main():
 
     print(f"\n📝 Issue #{issue_id}: {title} (Şu anki proje: {current_project_name})")
 
-    # === Projeleri Çek
     projects = get_projects()
     if not projects:
         return
     project_names = [p["name"] for p in projects]
 
-    # === Proje Tahmini
     predicted_project_name = classify_project_with_ollama(title, description, project_names)
     if predicted_project_name is None:
-        print("Proje tahmini alınamadı. Ollama API çalışmıyor olabilir veya yanıt boş.")
+        print("Proje tahmini alınamadı.")
         return
     predicted_project = next((p for p in projects if p["name"].lower() == predicted_project_name.lower()), None)
     if not predicted_project:
@@ -136,24 +139,21 @@ def main():
         return
     predicted_project_id = predicted_project["id"]
 
-    # === Gerekirse Proje Değiştir
     if predicted_project_name != current_project_name:
         print(f"📦 Issue projeyi değiştiriyor: {current_project_name} ➝ {predicted_project_name}")
         if not update_issue_project(issue_id, predicted_project_id):
             print("Proje güncellenemedi.")
             return
 
-    # === Kategorileri Çek
     categories = get_categories(predicted_project_id)
     if not categories:
         print("Kategori listesi boş.")
         return
     category_names = [cat["name"] for cat in categories]
 
-    # === Kategori Tahmini
     predicted_category_name = classify_with_ollama(title, description, category_names, "kategori")
     if predicted_category_name is None:
-        print("Kategori tahmini alınamadı. Ollama API çalışmıyor olabilir veya yanıt boş.")
+        print("Kategori tahmini alınamadı.")
         return
     matched_cat = next((c for c in categories if c["name"].lower() == predicted_category_name.lower()), None)
     if not matched_cat:
