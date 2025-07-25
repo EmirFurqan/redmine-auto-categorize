@@ -120,5 +120,4 @@ def predict(texts):
 print("Model eğitimi tamamlandı!")
 print("Örnek tahmin:", predict(["Yeni ekip üyesi için sistem erişim hazırlığı"]))
 
-eval_results = trainer.evaluate()
-print("Değerlendirme sonuçları:", eval_results)
+
